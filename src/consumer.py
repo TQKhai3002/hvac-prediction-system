@@ -64,7 +64,7 @@ async def kafka_consumer():
                 rows = [msg.value for msg in messages]
                 if rows:
                     df = pd.DataFrame(rows)
-                    required_columns = ['out_temp', 'out_hum', 'Number of people', 'Room Area (m2)', 'active_units', 'hour', 'day']
+                    required_columns = ['out_temp', 'out_hum', 'num_people', 'room_area', 'active_units', 'hour', 'day']
                     if not all(col in df.columns for col in required_columns):
                         logger.error("Missing features in Kafka message")
                         continue

@@ -25,8 +25,8 @@ def fetch_real_data():
     return {
         'out_temp': 25.0,
         'out_hum': 60.0,
-        'Number of people': 10,
-        'Room Area (m2)': 100.0,
+        'num_people': 10,
+        'room_area': 100.0,
         'active_units': 2,
         'hour': 14,
         'day': 1
