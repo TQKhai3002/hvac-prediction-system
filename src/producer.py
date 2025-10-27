@@ -14,9 +14,9 @@ logger = logging.getLogger(__name__)
 predictions_total = Counter('hvac_predictions_total', 'Total HVAC predictions made')
 
 # Load models (assume in /models/)
-clf_model = joblib.load('/app/models/best_rf_classifier.pkl')  # Use Docker volume path
-reg_model = joblib.load('/app/models/best_rf_model.pkl')
-scaler = joblib.load('/app/models/scaler.pkl')
+clf_model = joblib.load('/models/best_rf_classifier.pkl')  # Use Docker volume path
+reg_model = joblib.load('/models/best_rf_model.pkl')
+scaler = joblib.load('/models/scaler.pkl')
 
 class HVACModel(BaseEstimator):
     def __init__(self, reg_model, clf_model):
