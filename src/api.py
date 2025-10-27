@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import uvicorn
@@ -8,12 +9,38 @@ import joblib
 
 app = FastAPI(title="HVAC Prediction API")
 
-# Load models (Docker path)
-clf_model = joblib.load('/app/models/best_rf_classifier.pkl')
-reg_model = joblib.load('/app/models/best_rf_model.pkl')
-scaler = joblib.load('/app/models/scaler.pkl')
+# Dynamic model path
+IN_DOCKER = os.getenv('IN_DOCKER', 'false').lower() == 'true'
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODELS_DIR = '/app/models' if IN_DOCKER else os.path.join(BASE_DIR, '..', 'models')
 
-# Pipeline (same as consumer)
+# Load models
+try:
+    print(f"Loading models from {MODELS_DIR}")
+    clf_model = joblib.load(os.path.join(MODELS_DIR, 'best_rf_classifier.pkl'))
+    reg_model = joblib.load(os.path.join(MODELS_DIR, 'best_rf_model.pkl'))
+    scaler = joblib.load(os.path.join(MODELS_DIR, 'scaler.pkl'))
+except FileNotFoundError as e:
+    print(f"Error: Model file not found at {MODELS_DIR}: {e}")
+    raise
+
+class HVACModel(BaseEstimator):
+    def __init__(self, reg_model, clf_model):
+        self.reg_model = reg_model
+        self.clf_model = clf_model
+
+    def fit(self, X, y=None):
+        return self
+
+    def predict(self, X):
+        clf_pred = self.clf_model.predict(X)
+        reg_pred = self.reg_model.predict(X)
+        return clf_pred, reg_pred
+
+    def __sklearn_is_fitted__(self):
+        return True
+
+pipeline = Pipeline([('scaler', scaler), ('hvac_model', HVACModel(reg_model, clf_model))])
 
 class InputData(BaseModel):
     out_temp: float

@@ -1,70 +1,49 @@
-from sklearn.pipeline import Pipeline
-from sklearn.base import BaseEstimator
-import pandas as pd
-import joblib
-from aiokafka import AIOKafkaConsumer
-import asyncio
-import logging
-from prometheus_client import Counter, start_http_server
+from kafka import KafkaProducer
+from kafka.errors import KafkaError
+import json
+import time
 from decouple import config
+import logging
+import requests
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-predictions_total = Counter('hvac_predictions_total', 'Total HVAC predictions made')
+bootstrap_servers = config('KAFKA_BOOTSTRAP_SERVERS', default='localhost:9092').split(',')
+topic = config('KAFKA_TOPIC', default='hvac-input')
+interval = config('STREAM_INTERVAL', cast=float, default=300)
 
-# Load models (assume in /models/)
-clf_model = joblib.load('/models/best_rf_classifier.pkl')  # Use Docker volume path
-reg_model = joblib.load('/models/best_rf_model.pkl')
-scaler = joblib.load('/models/scaler.pkl')
+producer = KafkaProducer(
+    bootstrap_servers=bootstrap_servers,
+    value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+    batch_size=16384,
+    linger_ms=5,
+    compression_type='gzip'
+)
 
-class HVACModel(BaseEstimator):
-    def __init__(self, reg_model, clf_model):
-        self.reg_model = reg_model
-        self.clf_model = clf_model
+def fetch_real_data():
+    return {
+        'out_temp': 25.0,
+        'out_hum': 60.0,
+        'Number of people': 10,
+        'Room Area (m2)': 100.0,
+        'active_units': 2,
+        'hour': 14,
+        'day': 1
+    }
 
-    def fit(self, X, y=None):
-        return self
-
-    def predict(self, X):
-        clf_pred = self.clf_model.predict(X)
-        reg_pred = self.reg_model.predict(X)
-        return clf_pred, reg_pred
-
-    def __sklearn_is_fitted__(self):
-        return True
-
-pipeline = Pipeline([('scaler', scaler), ('hvac_model', HVACModel(reg_model, clf_model))])
-
-async def kafka_consumer():
-    consumer = AIOKafkaConsumer(
-        config('KAFKA_TOPIC', default='hvac-input'),
-        bootstrap_servers=config('KAFKA_BOOTSTRAP_SERVERS', default='localhost:9092').split(','),
-        group_id='hvac-group',
-        auto_offset_reset='earliest',
-        value_deserializer=lambda m: json.loads(m.decode('utf-8'))
-    )
-    await consumer.start()
-    try:
-        while True:
-            batch = await consumer.getmany(timeout_ms=1000, max_records=10)  # Small batch for sporadic data
-            for topic_partition, messages in batch.items():
-                rows = [msg.value for msg in messages]
-                if rows:
-                    df = pd.DataFrame(rows)
-                    required_columns = ['out_temp', 'out_hum', 'num_people', 'room_area', 'active_units', 'hour', 'day']
-                    if not all(col in df.columns for col in required_columns):
-                        logger.error("Missing features")
-                        continue
-                    X = df[required_columns]
-                    fan_speed_pred, setpoint_pred = pipeline.predict(X)
-                    for i, (sp, fs) in enumerate(zip(setpoint_pred, fan_speed_pred)):
-                        predictions_total.inc()
-                        logger.info(f"Prediction - Setpoint: {sp}, Fan Speed: {fs}")
-                        # Add action: e.g., send to DB or actuator
-    finally:
-        await consumer.stop()
+def stream_real_data():
+    while True:
+        try:
+            row = fetch_real_data()
+            producer.send(topic, value=row).get(timeout=10)
+            logger.info(f"Sent to Kafka: {row}")
+            producer.flush()
+        except KafkaError as e:
+            logger.error(f"Failed to send: {e}")
+        except Exception as e:
+            logger.error(f"Data fetch error: {e}")
+        time.sleep(interval)
 
 if __name__ == '__main__':
-    start_http_server(8001)  # Metrics
-    asyncio.run(kafka_consumer())
+    stream_real_data()

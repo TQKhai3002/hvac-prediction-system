@@ -1,54 +1,81 @@
-from kafka import KafkaProducer
-from kafka.errors import KafkaError
-import json
-import time
-from decouple import config
+import os
+import pandas as pd
+import joblib
+from aiokafka import AIOKafkaConsumer
+import asyncio
 import logging
-import requests  # Example for API fetch; adjust as needed
+from prometheus_client import Counter, start_http_server
+from decouple import config
+from sklearn.pipeline import Pipeline
+from sklearn.base import BaseEstimator
+import json
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Kafka config from .env
-bootstrap_servers = config('KAFKA_BOOTSTRAP_SERVERS', default='localhost:9092').split(',')
-topic = config('KAFKA_TOPIC', default='hvac-input')
-interval = config('STREAM_INTERVAL', cast=float, default=300)  # Seconds between sends
+predictions_total = Counter('hvac_predictions_total', 'Total HVAC predictions made')
 
-producer = KafkaProducer(
-    bootstrap_servers=bootstrap_servers,
-    value_serializer=lambda v: json.dumps(v).encode('utf-8'),
-    batch_size=16384,
-    linger_ms=5,
-    compression_type='gzip'
-)
+# Dynamic model path
+IN_DOCKER = os.getenv('IN_DOCKER', 'false').lower() == 'true'
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODELS_DIR = '/app/models' if IN_DOCKER else os.path.join(BASE_DIR, '..', 'models')
 
-def fetch_real_data():
-    # Placeholder: Replace with real sensor/API call
-    # e.g., response = requests.get('https://your-sensor-api/data')
-    # return response.json()
-    return {
-        'out_temp': 25.0,
-        'out_hum': 60.0,
-        'num_people': 10,
-        'room_area': 100.0,
-        'active_units': 2,
-        'hour': 14,
-        'day': 1
-    }
+# Load models
+try:
+    logger.info(f"Loading models from {MODELS_DIR}")
+    clf_model = joblib.load(os.path.join(MODELS_DIR, 'best_rf_classifier.pkl'))
+    reg_model = joblib.load(os.path.join(MODELS_DIR, 'best_rf_model.pkl'))
+    scaler = joblib.load(os.path.join(MODELS_DIR, 'scaler.pkl'))
+except FileNotFoundError as e:
+    logger.error(f"Model file not found: {e}")
+    raise
 
-def stream_real_data():
-    while True:
-        try:
-            row = fetch_real_data()
-            producer.send(topic, value=row).get(timeout=10)
-            logger.info(f"Sent to Kafka: {row}")
-            producer.flush()
-        except KafkaError as e:
-            logger.error(f"Failed to send: {e}")
-        except Exception as e:
-            logger.error(f"Data fetch error: {e}")
-        time.sleep(interval)
+class HVACModel(BaseEstimator):
+    def __init__(self, reg_model, clf_model):
+        self.reg_model = reg_model
+        self.clf_model = clf_model
+
+    def fit(self, X, y=None):
+        return self
+
+    def predict(self, X):
+        clf_pred = self.clf_model.predict(X)
+        reg_pred = self.reg_model.predict(X)
+        return clf_pred, reg_pred
+
+    def __sklearn_is_fitted__(self):
+        return True
+
+pipeline = Pipeline([('scaler', scaler), ('hvac_model', HVACModel(reg_model, clf_model))])
+
+async def kafka_consumer():
+    consumer = AIOKafkaConsumer(
+        config('KAFKA_TOPIC', default='hvac-input'),
+        bootstrap_servers=config('KAFKA_BOOTSTRAP_SERVERS', default='localhost:9092').split(','),
+        group_id='hvac-group',
+        auto_offset_reset='earliest',
+        value_deserializer=lambda m: json.loads(m.decode('utf-8'))
+    )
+    await consumer.start()
+    try:
+        while True:
+            batch = await consumer.getmany(timeout_ms=1000, max_records=10)
+            for topic_partition, messages in batch.items():
+                rows = [msg.value for msg in messages]
+                if rows:
+                    df = pd.DataFrame(rows)
+                    required_columns = ['out_temp', 'out_hum', 'Number of people', 'Room Area (m2)', 'active_units', 'hour', 'day']
+                    if not all(col in df.columns for col in required_columns):
+                        logger.error("Missing features in Kafka message")
+                        continue
+                    X = df[required_columns]
+                    fan_speed_pred, setpoint_pred = pipeline.predict(X)
+                    for i, (sp, fs) in enumerate(zip(setpoint_pred, fan_speed_pred)):
+                        predictions_total.inc()
+                        logger.info(f"Prediction - Setpoint: {sp}, Fan Speed: {fs}")
+    finally:
+        await consumer.stop()
 
 if __name__ == '__main__':
-    stream_real_data()
-    producer.close()  # Won't reach here; add signal handling if needed
+    start_http_server(8001)
+    asyncio.run(kafka_consumer())
