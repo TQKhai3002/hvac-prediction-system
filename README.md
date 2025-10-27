@@ -1,2 +1,2 @@
-# hvac-prediction-system
-A git hub repository for applying AI for HVAC
+# HVAC Prediction System
+A project for predicting HVAC setpoints and fan speeds using machine learning models.
