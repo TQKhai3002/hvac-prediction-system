@@ -24,7 +24,7 @@ MODELS_DIR = '/app/models' if IN_DOCKER else os.path.join(BASE_DIR, '..', 'model
 try:
     logger.info(f"Loading models from {MODELS_DIR}")
     clf_model = joblib.load(os.path.join(MODELS_DIR, 'best_rf_classifier.pkl'))
-    reg_model = joblib.load(os.path.join(MODELS_DIR, 'best_rf_model.pkl'))
+    reg_model = joblib.load(os.path.join(MODELS_DIR, 'best_rf_regressor.pkl'))
     scaler = joblib.load(os.path.join(MODELS_DIR, 'scaler.pkl'))
 except FileNotFoundError as e:
     logger.error(f"Model file not found: {e}")
@@ -64,7 +64,7 @@ async def kafka_consumer():
                 rows = [msg.value for msg in messages]
                 if rows:
                     df = pd.DataFrame(rows)
-                    required_columns = ['out_temp', 'out_hum', 'num_people', 'room_area', 'active_units', 'hour', 'day']
+                    required_columns = ['out_temp', 'out_hum', 'num_people', 'room_area', 'active_units', 'hour', 'day', 'prev_setpoint', 'prev_fan_speed', 'prev_out_temp']
                     if not all(col in df.columns for col in required_columns):
                         logger.error("Missing features in Kafka message")
                         continue

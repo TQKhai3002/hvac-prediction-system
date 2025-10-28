@@ -29,7 +29,10 @@ def fetch_real_data():
         'room_area': 100.0,
         'active_units': 2,
         'hour': 14,
-        'day': 1
+        'day': 1,
+        'prev_setpoint': 22.0,
+        'prev_fan_speed': 3,
+        'prev_out_temp': 24.5
     }
 
 def stream_real_data():

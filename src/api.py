@@ -18,7 +18,7 @@ MODELS_DIR = '/app/models' if IN_DOCKER else os.path.join(BASE_DIR, '..', 'model
 try:
     print(f"Loading models from {MODELS_DIR}")
     clf_model = joblib.load(os.path.join(MODELS_DIR, 'best_rf_classifier.pkl'))
-    reg_model = joblib.load(os.path.join(MODELS_DIR, 'best_rf_model.pkl'))
+    reg_model = joblib.load(os.path.join(MODELS_DIR, 'best_rf_regressor.pkl'))
     scaler = joblib.load(os.path.join(MODELS_DIR, 'scaler.pkl'))
 except FileNotFoundError as e:
     print(f"Error: Model file not found at {MODELS_DIR}: {e}")
@@ -55,7 +55,7 @@ class InputData(BaseModel):
 async def predict(data: InputData):
     try:
         df = pd.DataFrame([data.dict()])
-        required_columns = ['out_temp', 'out_hum', 'num_people', 'room_area', 'active_units', 'hour', 'day']
+        required_columns = ['out_temp', 'out_hum', 'num_people', 'room_area', 'active_units', 'hour', 'day', 'prev_setpoint', 'prev_fan_speed', 'prev_out_temp']
         X = df[required_columns]
         fan_speed_pred, setpoint_pred = pipeline.predict(X)
         return {"predicted_setpoint": float(setpoint_pred[0]), "predicted_fan_speed": float(fan_speed_pred[0])}
