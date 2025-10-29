@@ -6,6 +6,7 @@ import pandas as pd
 from sklearn.pipeline import Pipeline
 from sklearn.base import BaseEstimator
 import joblib
+from typing import List
 
 app = FastAPI(title="HVAC Prediction API")
 
@@ -50,17 +51,50 @@ class InputData(BaseModel):
     active_units: int
     hour: int
     day: int
-
+    prev_setpoint: float
+    prev_fan_speed: int
+    prev_out_temp: float
+    
+class BatchInput(BaseModel):
+    data: List[InputData]
+    
 @app.post("/predict")
-async def predict(data: InputData):
+async def predict_batch(batch: BatchInput):
     try:
-        df = pd.DataFrame([data.dict()])
-        required_columns = ['out_temp', 'out_hum', 'num_people', 'room_area', 'active_units', 'hour', 'day', 'prev_setpoint', 'prev_fan_speed', 'prev_out_temp']
+        records = [item.model_dump() for item in batch.data]
+        df = pd.DataFrame(records)
+
+        required_columns = [
+            'out_temp', 'out_hum', 'num_people', 'room_area', 'active_units',
+            'hour', 'day', 'prev_setpoint', 'prev_fan_speed', 'prev_out_temp'
+        ]
+
+        missing_cols = [col for col in required_columns if col not in df.columns]
+        if missing_cols:
+            raise HTTPException(status_code=400, detail=f"Missing columns: {missing_cols}")
+
         X = df[required_columns]
-        fan_speed_pred, setpoint_pred = pipeline.predict(X)
-        return {"predicted_setpoint": float(setpoint_pred[0]), "predicted_fan_speed": float(fan_speed_pred[0])}
+
+        fan_speed_preds, setpoint_preds = pipeline.predict(X)
+
+        results = [
+            {
+                "predicted_setpoint": float(setpoint),
+                "predicted_fan_speed": int(fan_speed)  
+            }
+            for setpoint, fan_speed in zip(setpoint_preds, fan_speed_preds)
+        ]
+
+        return {"predictions": results}
+
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/predict_single")
+async def predict_single(data: InputData):
+    return await predict_batch(BatchInput(data=[data]))
+
 
 if __name__ == '__main__':
     uvicorn.run(app, host="0.0.0.0", port=8000)
