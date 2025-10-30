@@ -1,0 +1,30 @@
+"http://172.24.149.173:8000/predict" 
+
+'{
+           "data": [
+             {
+               "out_temp": 28.5,
+               "out_hum": 65.0,
+               "num_people": 4,
+               "room_area": 35.0,
+               "active_units": 2,
+               "hour": 14,
+               "day": 3,
+               "prev_setpoint": 23.0,
+               "prev_fan_speed": 2,
+               "prev_out_temp": 27.8
+             },
+             {
+               "out_temp": 22.1,
+               "out_hum": 70.0,
+               "num_people": 1,
+               "room_area": 20.0,
+               "active_units": 1,
+               "hour": 8,
+               "day": 1,
+               "prev_setpoint": 24.5,
+               "prev_fan_speed": 1,
+               "prev_out_temp": 23.0
+             }
+           ]
+         }'
