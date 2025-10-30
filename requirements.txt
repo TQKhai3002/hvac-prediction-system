@@ -1,9 +1,6 @@
-kafka-python
 pandas
 scikit-learn
 joblib
 fastapi
 uvicorn
-aiokafka
-python-decouple
-prometheus-client 
+pydantic
