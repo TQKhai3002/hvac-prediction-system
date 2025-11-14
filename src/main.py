@@ -54,6 +54,8 @@ class InputData(BaseModel):
     prev_setpoint: float
     prev_fan_speed: int
     prev_out_temp: float
+    room_name: str
+    
     
 class BatchInput(BaseModel):
     data: List[InputData]
@@ -66,23 +68,23 @@ async def predict_batch(batch: BatchInput):
 
         required_columns = [
             'out_temp', 'out_hum', 'num_people', 'room_area', 'active_units',
-            'hour', 'day', 'prev_setpoint', 'prev_fan_speed', 'prev_out_temp'
+            'hour', 'day', 'prev_setpoint', 'prev_fan_speed', 'prev_out_temp', 'room_name'
         ]
 
         missing_cols = [col for col in required_columns if col not in df.columns]
         if missing_cols:
             raise HTTPException(status_code=400, detail=f"Missing columns: {missing_cols}")
 
-        X = df[required_columns]
+        X = df[required_columns].drop(columns=['room_name'])
 
         fan_speed_preds, setpoint_preds = pipeline.predict(X)
 
         results = [
-            {
+            {   "room_name": record['room_name'],
                 "predicted_setpoint": float(setpoint),
                 "predicted_fan_speed": int(fan_speed)  
             }
-            for setpoint, fan_speed in zip(setpoint_preds, fan_speed_preds)
+            for setpoint, fan_speed, record in zip(setpoint_preds, fan_speed_preds, records)
         ]
 
         return {"predictions": results}
