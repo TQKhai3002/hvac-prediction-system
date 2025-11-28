@@ -2,5 +2,8 @@ pandas
 scikit-learn
 joblib
 fastapi
-uvicorn
+uvicorn[standard]
 pydantic
+flask
+flask_cors
+
