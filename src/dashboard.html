@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HVAC Command Center</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root {
+            --bg-body: #0b1120;       
+            --chat-area-bg: #151e32;  
+            --header-bg: #1e293b;     
+            
+            /* Gradients */
+            --bubble-user-grad: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            --bubble-ai-grad: linear-gradient(135deg, #334155 0%, #475569 100%);
+            
+            --text-white: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-glow: rgba(59, 130, 246, 0.5);
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-body);
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        /* --- Main Container --- */
+        .desktop-container {
+            width: 90%;
+            max-width: 1100px;
+            height: 92vh;
+            background-color: var(--chat-area-bg);
+            border-radius: 16px;
+            box-shadow: 0 0 40px -10px var(--accent-glow), 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* --- Header --- */
+        .app-header {
+            background-color: rgba(30, 41, 59, 0.9);
+            padding: 20px 35px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .header-left { display: flex; align-items: center; gap: 15px; }
+
+        .logo-box {
+            background: linear-gradient(135deg, #3b82f6, #06b6d4);
+            width: 45px; height: 45px;
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.2rem; color: white;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+        }
+
+        .header-title { color: var(--text-white); font-size: 1.25rem; font-weight: 700; }
+        .header-sub { font-size: 0.85rem; color: var(--text-muted); font-weight: 400; }
+
+        .status-badge {
+            font-size: 0.8rem; padding: 6px 16px; border-radius: 30px;
+            background-color: rgba(15, 23, 42, 0.6);
+            color: var(--text-muted); border: 1px solid rgba(255,255,255,0.1);
+            display: flex; align-items: center; gap: 8px; font-weight: 600;
+        }
+        .status-badge.connected { color: #4ade80; border-color: rgba(74, 222, 128, 0.3); background-color: rgba(74, 222, 128, 0.1); }
+        .status-dot { width: 8px; height: 8px; background-color: #ef4444; border-radius: 50%; }
+        .status-badge.connected .status-dot { background-color: #4ade80; box-shadow: 0 0 10px #4ade80; }
+
+        /* --- Chat Stream --- */
+        #chat-stream {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            scroll-behavior: smooth;
+        }
+
+        /* --- Bubble Wrappers --- */
+        .msg-wrapper {
+            display: flex; flex-direction: column;
+            width: 100%; 
+            opacity: 0; 
+            transform: translateY(20px);
+            animation: slideUp 0.3s ease-out forwards;
+        }
+        .msg-wrapper.right { align-items: flex-end; }
+        .msg-wrapper.left { align-items: flex-start; }
+
+        .message-row {
+            display: flex; align-items: flex-end; gap: 15px; max-width: 80%;
+        }
+        .msg-wrapper.right .message-row { flex-direction: row-reverse; }
+
+        /* Avatars */
+        .avatar {
+            width: 44px; height: 44px; border-radius: 12px;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 1.1rem; flex-shrink: 0;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        .avatar.ai { background: white; color: #0f172a; }
+        .avatar.sensor { background: #3b82f6; color: white; }
+
+        /* Bubbles */
+        .bubble {
+            padding: 18px 24px; color: var(--text-white);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+            position: relative;
+        }
+        .msg-wrapper.left .bubble {
+            background: var(--bubble-ai-grad);
+            border-radius: 18px 18px 18px 4px;
+        }
+        .msg-wrapper.right .bubble {
+            background: var(--bubble-user-grad);
+            border-radius: 18px 18px 4px 18px;
+        }
+
+        /* Internal Data Layout */
+        .bubble-top {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.15);
+            padding-bottom: 8px;
+        }
+        .room-tag { font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; }
+
+        .data-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+        }
+        .d-item { text-align: center; }
+        .d-label { font-size: 0.65rem; text-transform: uppercase; opacity: 0.7; margin-bottom: 3px; display: block;}
+        .d-val { font-size: 1rem; font-weight: 600; }
+
+        /* AI Result Specifics */
+        .ai-result-box {
+            display: flex; align-items: center; gap: 20px;
+            background: rgba(0,0,0,0.25); padding: 12px 20px; border-radius: 10px;
+        }
+        .res-group { display: flex; flex-direction: column; }
+        .res-big { font-size: 1.8rem; font-weight: 700; color: #4ade80; line-height: 1; }
+        .res-lbl { font-size: 0.75rem; margin-top: 4px; opacity: 0.8; }
+        
+        /* Timestamp */
+        .timestamp {
+            font-size: 0.7rem; color: #64748b; margin-top: 6px; font-weight: 500;
+        }
+        .msg-wrapper.right .timestamp { margin-right: 60px; }
+        .msg-wrapper.left .timestamp { margin-left: 60px; }
+
+        @keyframes slideUp { to { opacity: 1; transform: translateY(0); } }
+
+    </style>
+</head>
+<body>
+
+    <div class="desktop-container">
+        <div class="app-header">
+            <div class="header-left">
+                <div class="logo-box">
+                    <i class="fa-solid fa-fan"></i>
+                </div>
+                <div>
+                    <div class="header-title">HVAC Command AI</div>
+                    <div class="header-sub">Intelligent Building Management</div>
+                </div>
+            </div>
+            
+            <div id="status-badge" class="status-badge">
+                <span class="status-dot"></span>
+                <span id="status-text">Disconnected</span>
+            </div>
+        </div>
+
+        <div id="chat-stream">
+            <div style="text-align: center; color: #475569; margin-top: 20%; font-size: 1.1rem;">
+                <i class="fa-solid fa-satellite-dish" style="font-size: 3rem; margin-bottom: 20px; color: #334155;"></i>
+                <p>System Ready. Waiting for data...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const chatStream = document.getElementById('chat-stream');
+        const statusBadge = document.getElementById('status-badge');
+        const statusText = document.getElementById('status-text');
+
+        function connect() {
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws`);
+
+            ws.onopen = () => {
+                statusBadge.classList.add('connected');
+                statusText.innerText = "Live Connection";
+                if(chatStream.innerText.includes("System Ready")) chatStream.innerHTML = '';
+            };
+
+            ws.onclose = () => {
+                statusBadge.classList.remove('connected');
+                statusText.innerText = "Reconnecting...";
+                setTimeout(connect, 3000);
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'prediction_update') {
+                    const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second:'2-digit' });
+
+                    // --- STEP 1: Print ALL Inputs first ---
+                    data.inputs.forEach(input => {
+                        appendSensorMessage(input, timeString);
+                    });
+
+                    // --- STEP 2: Print ALL Outputs second ---
+                    data.outputs.forEach((output, index) => {
+                        // We need the room name from the corresponding input
+                        const associatedInput = data.inputs[index];
+                        appendAIMessage(output, associatedInput.room_name, timeString);
+                    });
+
+                    // Scroll to bottom once after batch
+                    chatStream.scrollTop = chatStream.scrollHeight;
+                }
+            };
+        }
+
+        function appendSensorMessage(input, time) {
+            const html = `
+                <div class="bubble">
+                    <div class="bubble-top">
+                        <div class="room-tag"><i class="fa-solid fa-location-dot"></i> ${input.room_name}</div>
+                        <div style="font-size:0.75rem; opacity:0.8;">SENSOR DATA</div>
+                    </div>
+                    <div class="data-grid">
+                        <div class="d-item">
+                            <span class="d-label"><i class="fa-solid fa-temperature-half"></i> Outdoor</span>
+                            <span class="d-val">${input.out_temp}°</span>
+                        </div>
+                        <div class="d-item">
+                            <span class="d-label"><i class="fa-solid fa-droplet"></i> Humid</span>
+                            <span class="d-val">${input.out_hum}%</span>
+                        </div>
+                        <div class="d-item">
+                            <span class="d-label"><i class="fa-solid fa-users"></i> Ppl</span>
+                            <span class="d-val">${input.num_people}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            // "right" side, Satellite Icon
+            createRow(html, 'right', '<i class="fa-solid fa-tower-broadcast"></i>', time);
+        }
+
+        function appendAIMessage(output, roomName, time) {
+            const html = `
+                <div class="bubble">
+                    <div class="bubble-top">
+                        <div class="room-tag">Analysis: ${roomName}</div>
+                        <div style="color:#4ade80; font-size:0.75rem; font-weight:700;"><i class="fa-solid fa-check-circle"></i> OPTIMIZED</div>
+                    </div>
+                    <div class="ai-result-box">
+                        <div class="res-group">
+                            <span class="res-big">${output.predicted_setpoint.toFixed(1)}°</span>
+                            <span class="res-lbl">Setpoint</span>
+                        </div>
+                        <div style="width:1px; height:40px; background:rgba(255,255,255,0.2)"></div>
+                        <div class="res-group">
+                            <span class="res-big" style="color:#38bdf8">${output.predicted_fan_speed}</span>
+                            <span class="res-lbl">Fan Speed</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            // "left" side, Robot Icon
+            createRow(html, 'left', '<i class="fa-solid fa-robot"></i>', time);
+        }
+
+        function createRow(content, side, icon, time) {
+            const wrapper = document.createElement('div');
+            wrapper.className = `msg-wrapper ${side}`;
+            
+            const row = document.createElement('div');
+            row.className = 'message-row';
+            
+            row.innerHTML = `
+                <div class="avatar ${side === 'left' ? 'ai' : 'sensor'}">
+                    ${icon}
+                </div>
+                ${content}
+            `;
+            
+            const ts = document.createElement('div');
+            ts.className = 'timestamp';
+            ts.innerText = time;
+
+            wrapper.appendChild(row);
+            wrapper.appendChild(ts);
+            
+            chatStream.appendChild(wrapper);
+        }
+
+        connect();
+    </script>
+</body>
+</html>

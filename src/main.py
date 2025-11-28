@@ -6,15 +6,20 @@ import pandas as pd
 from sklearn.pipeline import Pipeline
 from sklearn.base import BaseEstimator
 import joblib
+from pathlib import Path
 from typing import List
-
+import json
+import time
+LOG_FILE = Path("prediction_log.jsonl")
 app = FastAPI(title="HVAC Prediction API")
 
 # Dynamic model path
 IN_DOCKER = os.getenv('IN_DOCKER', 'false').lower() == 'true'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR = '/app/models' if IN_DOCKER else os.path.join(BASE_DIR, '..', 'models')
-
+def log_request(input_data, prediction):
+    with LOG_FILE.open("a") as f:
+        f.write(json.dumps({"input": input_data, "prediction": prediction}) + "\n")
 # Load models
 try:
     print(f"Loading models from {MODELS_DIR}")
@@ -82,10 +87,12 @@ async def predict_batch(batch: BatchInput):
         results = [
             {   "room_name": record['room_name'],
                 "predicted_setpoint": float(setpoint),
-                "predicted_fan_speed": int(fan_speed)  
+                "predicted_fan_speed": int(fan_speed),
             }
             for setpoint, fan_speed, record in zip(setpoint_preds, fan_speed_preds, records)
         ]
+
+        log_request(records, results)
 
         return {"predictions": results}
 
