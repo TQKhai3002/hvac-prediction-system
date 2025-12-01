@@ -226,19 +226,19 @@
                 if (data.type === 'prediction_update') {
                     const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second:'2-digit' });
 
-                    // --- STEP 1: Print ALL Inputs first ---
-                    data.inputs.forEach(input => {
+                    // Print Inputs
+                    data.inputs.forEach(input => { 
                         appendSensorMessage(input, timeString);
                     });
 
-                    // --- STEP 2: Print ALL Outputs second ---
+                    // Print Outputs
                     data.outputs.forEach((output, index) => {
-                        // We need the room name from the corresponding input
+                        
                         const associatedInput = data.inputs[index];
                         appendAIMessage(output, associatedInput.room_name, timeString);
                     });
 
-                    // Scroll to bottom once after batch
+                    // Auto scroll
                     chatStream.scrollTop = chatStream.scrollHeight;
                 }
             };
